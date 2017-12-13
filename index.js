@@ -58,10 +58,12 @@ server.listen(8080, function() {
 });
 
 
+console.log(__dirname);
 
 app.get('/', function(req, res) {
     console.log('---------- lanzando sites ------')
     res.sendfile(__dirname + '/page/index.html')
+
 });
 
 io.on('connection', function(socket) {
