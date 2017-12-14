@@ -1,71 +1,66 @@
-var cors = require('cors');
 var app = require('express')();
 app.use(cors());
-
-//================================
-var http = require('http');
-var https = require('https')
-var path = require("path");
-var os = require('os');
-var fs = require('fs');
-var ifaces = os.networkInterfaces();
-
-var privateKey = '';
-var certificate = '';
-var credentials = { key: privateKey, cert: certificate };
-//var httpsServer=https.createServer(credentials,app);
-
-Object.keys(ifaces).forEach(function(ifname) {
-    var alias = 0;
-
-    ifaces[ifname].forEach(function(iface) {
-        if ('IPv4' !== iface.family || iface.internal !== false) {
-            // skip over internal (i.e. 127.0.0.1) and non-ipv4 addresses
-            return;
-        }
-
-        console.log("");
-        console.log("Iniciando Servicios");
-        console.log("");
-        console.log("Test de puertos configurdos : ", "https://localhost:8443");
-        console.log("");
-        console.log("");
-
-        if (alias >= 1) {
-            console.log("Multiple ipv4 addreses were found ... ");
-            // this single interface has multiple ipv4 addresses
-            console.log(ifname + ':' + alias, "https://" + iface.address + ":8443");
-        } else {
-            // this interface has only one ipv4 adress
-            console.log(ifname, "https://" + iface.address + ":8443");
-            console.log(ifname, "http://" + iface.address + ":8080");
-        }
-
-        ++alias;
-    });
-});
-
-
-var LANAccess = "0.0.0.0";
-
-//===================================
-
 var server = require('http').Server(app);
-var io = require('socket.io')(server);
-
+var io = require('socket.io')(server)
 server.listen(8080, function() {
     console.log('servidor corriendo...')
 });
 
 
-console.log(__dirname);
-
-app.get('/', function(req, res) {
-    console.log('---------- lanzando sites ------')
-    res.sendfile(__dirname + '/page/index.html')
-
-});
-
 io.on('connection', function(socket) {
+    console.log('clientes conectados: ' + io.engine.clientsCount + ' client');
 
+    function log() {
+        var array = ['Messaje del server:'];
+        array.push.apply(array, arguments);
+        socket.emit('log', array);
+    }
+    socket.on('message', function(message) {
+        console.log('Cliente dice: ', message)
+            //log('Cliente dice: ',message);
+            //retransmitimos el mensaje a todos lo clientes
+        socket.broadcast.emit('message', message);
+    });
+    socket.on('create or join', function(room) {
+        console.log('Recibimos la respuesta de crear o unirse a la sala : ' + room)
+            //log('Recibimos la respuesta de crear o unirse a la sala : ',room);
+        var numClients = io.engine.clientsCount;
+        console.log('la sala ' + room + ' tiene ' + numClients + ' de clientes')
+            //log('la sala '+ room+ ' tiene '+ numClients + ' de clientes');
+
+        if (numClients === 1) {
+            socket.join(room);
+            //log('el cliente '+ socket.id + ' a creado la sala '+ room );
+            console.log('el cliente ' + socket.id + ' a creado la sala ' + room);
+            socket.emit('created', room, socket.id); // se trasnmite que el socket esta creado
+        }
+        if (numClients === 2) {
+            //log('el cliente '+ socket.id + ' se ha unido a las sala '+ room );
+            console.log('el cliente ' + socket.id + ' se ha unido a las sala ' + room)
+            io.in(room).emit('join', room);
+            socket.join(room);
+            socket.emit('joined', room, socket.id);
+            io.in(room).emit('ready');
+        }
+        if (numClients > 2) {
+            console.log('la sala esta llena')
+            socket.emit('full', room); //se transmite que la sala esta llena
+        }
+
+
+    });
+    socket.on('ipaddr', function() {
+        var iface = os.networkInterfaces();
+        for (var dev in iface) {
+            iface[dev].forEach(function(details) {
+                if (details.family === 'IPv4' && details.address !== '127.0.0.1') {
+                    socket.emit('ipaddr', details.address);
+                }
+            });
+        }
+    });
+
+    socket.on('bye', function() {
+        console.log('received bye');
+    });
 });
