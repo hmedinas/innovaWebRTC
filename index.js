@@ -1,3 +1,4 @@
+var cors = require('cors')
 var app = require('express')();
 app.use(cors());
 var server = require('http').Server(app);
